@@ -412,3 +412,75 @@ public class Example11_7 {
 
 ```
 
+
+# Jwt 및 Basic Authentication 예시
+```java
+@Order(1)
+public class JwtAuthenticationFilter implements WebFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    private static final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256); // Replace with your secret key
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            try {
+                Claims claims = Jwts.parserBuilder()
+                        .setSigningKey(key)
+                        .build()
+                        .parseClaimsJws(token)
+                        .getBody();
+
+                Authentication authentication = new JwtAuthenticationToken(claims); // Custom implementation
+                SecurityContext context = new SecurityContextImpl(authentication);
+
+                return chain.filter(exchange)
+                  .contextWrite(ReactiveSecurityContextHolder                                  .withSecurityContext(Mono.just(context)));
+            } catch (Exception e) {
+                log.error("Invalid JWT token", e);
+                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                return exchange.getResponse().setComplete();
+            }
+        }
+
+        return chain.filter(exchange);
+    }
+}
+
+@Order(2)
+public class BasicAuthenticationFilter implements WebFilter {
+
+    private static final Logger log = LoggerFactory.getLogger(BasicAuthenticationFilter.class);
+
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        String authHeader = exchange.getRequest().getHeaders().getFirst("Authorization");
+
+        if (authHeader != null && authHeader.startsWith("Basic ")) {
+            String base64Credentials = authHeader.substring(6);
+            String credentials = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
+            final String[] values = credentials.split(":", 2);
+
+            String username = values[0];
+            String password = values[1];
+
+            // Replace with actual user validation logic
+            if ("user".equals(username) && "password".equals(password)) {
+                Authentication authentication = new BasicAuthenticationToken(username, password); // Custom implementation
+                SecurityContext context = new SecurityContextImpl(authentication);
+
+                return chain.filter(exchange)
+                  .contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(context)));
+            } else {
+                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                return exchange.getResponse().setComplete();
+            }
+        }
+
+        return chain.filter(exchange);
+    }
+}
+```
